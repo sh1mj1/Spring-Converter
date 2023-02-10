@@ -547,3 +547,195 @@ ipPort PORT = 8080
 부모 클래스와 다양한 외부 클래스를 호출하는 등 복잡한 내부 과정을 거치기 때문에 대략 이렇게 처리되는 것으로 이해해도 충분합니다.
 
 만약 더 깊이있게 확인하고 싶으면 `IpPortConverter` 에 디버그 브레이크 포인트를 걸어서 확인해봅시다.
+
+# 5. 뷰 템플릿에 컨버터 적용하기
+
+이번에는 뷰 템플릿에 컨버터를 적용하는 방법을 알아봅시다.
+
+타임리프는 렌더링 시에 컨버터를 적용해서 렌더링 하는 방법을 편리하게 지원합니다.
+
+이전까지는 문자를 객체로 변환했다면, 이번에는 그 반대로 객체를 문자로 변환하는 작업을 확인할 수 있습니다.
+
+`ConverterController`
+
+```java
+package hello.typeconverter.controller;
+
+import hello.typeconverter.type.IpPort;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+
+@Controller
+public class ConverterController {
+    @GetMapping("/converter-view")
+    public String converterView(Model model) {
+        model.addAttribute("number", 10000);
+        model.addAttribute("ipPort", new IpPort("127.0.0.1", 8080));
+        return "converter-view";
+    }
+}
+```
+
+`Model` 에 숫자 `10000` 와 `ipPort` 객체를 담아서 뷰 템플릿에 전달합니다.
+
+`resources/templates/converter-view.html`
+
+```html
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<ul>
+    <li>${number}: <span th:text="${number}"></span></li>
+    <li>${{number}}: <span th:text="${{number}}"></span></li>
+    <li>${ipPort}: <span th:text="${ipPort}"></span></li>
+    <li>${{ipPort}}: <span th:text="${{ipPort}}"></span></li>
+</ul>
+</body>
+</html>
+```
+
+타임리프는 `${{…}}` 을 사용하면 자동으로 컨버전 서비스를 사용해서 변환된 결과를 출력해줍니다. 
+
+물론 스프링과 통합되어서 스프링이 제공하는 컨버전 서비스를 사용하므로, 우리가 등록한 컨버터들을 사용할 수 있습니다.
+
+변수 표현식 : `${…}`
+
+컨버전 서비스 적용 : `${{…}}`
+
+실행
+
+http://localhost:8080/converter-view
+
+실행 결과
+
+![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/c6b2ada1-9f88-42fd-8fd3-910f3f41048e/Untitled.png)
+
+실행 결과 로그
+
+```java
+IntegerToStringConverter : convert source=10000
+IpPortToStringConverter : 
+				convert source=hello.typeconverter.type.IpPort@59cb0946
+```
+
+`${{number}}` : 뷰 템플릿은 데이터를 문자로 출력한다. 따라서 컨버터를 적용하게 되면 `Integer` 타입인 `10000` 을 `String` 타입으로 변환하는 컨버터인 `IntegerToStringConverter` 를 실행하게 된다. 
+
+이 부분은 컨버터를 실행하지 않아도 타임리프가 숫자를 문자로 자동으로 변환히기 때문에 컨버터를 적용할 때와 하지 않을 때가 같다.
+
+`${{ipPort}}` : 뷰 템플릿은 데이터를 문자로 출력한다. 따라서 컨버터를 적용하게 되면 `IpPort` 타입을 `String` 타입으로 변환해야 하므로 `IpPortToStringConverter` 가 적용된다. 그 결과 `127.0.0.1:8080` 가 출력된다.
+
+### 폼에 적용하기
+
+이번에는 컨버터를 폼에 적용해봅시다.
+
+`ConverterController` - 코드 추가
+
+```java
+package hello.typeconverter.controller;
+
+import hello.typeconverter.type.IpPort;
+import lombok.Data;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PostMapping;
+
+@Controller
+public class ConverterController {
+    @GetMapping("/converter-view")
+    public String converterView(Model model) {
+        model.addAttribute("number", 10000);
+        model.addAttribute("ipPort", new IpPort("127.0.0.1", 8080));
+        return "converter-view";
+    }
+
+    @GetMapping("/converter/edit")
+    public String converterForm(Model model) {
+        IpPort ipPort = new IpPort("127.0.0.1", 8080);
+        Form form = new Form(ipPort);
+        model.addAttribute("form", form);
+        return "converter-form";
+    }
+
+    @PostMapping("/converter/edit")
+    public String converterEdit(@ModelAttribute Form form, Model model) {
+        IpPort ipPort = form.getIpPort();
+        model.addAttribute("ipPort", ipPort);
+        return "converter-view";
+    }
+
+    @Data
+    static class Form {
+        private IpPort ipPort;
+
+        public Form(IpPort ipPort) {
+            this.ipPort = ipPort;
+        }
+    }
+
+}
+```
+
+`Form` 객체를 데이터를 전달하는 폼 객체로 사용한다.
+
+`GET /converter/edit` : `IpPort` 를 뷰 템플릿 폼에 출력한다.
+
+`POST /converter/edit` : 뷰 템플릿 폼의 `IpPort` 정보를 받아서 출력한다
+
+`resources/templates/converter-form.html`
+
+```html
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<form th:object="${form}" th:method="post">
+    th:field <input type="text" th:field="*{ipPort}"><br/>
+    th:value <input type="text" th:value="*{ipPort}">(보여주기 용도)<br/>
+    <input type="submit"/>
+</form>
+</body>
+</html>
+```
+
+타임리프의 `th:field` 는 앞서 설명했듯이 `id` , `name` 를 출력하는 등 다양한 기능이 있는데, 여기에 컨버전 서비스도 함께 적용된다.
+
+실행
+
+http://localhost:8080/converter/edit
+
+초기 화면
+
+![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/dc971b3b-7f93-4d2f-b5d1-394c32106b25/Untitled.png)
+
+th:field 에 포트를 3030 으로 변경
+
+![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/fd090e2c-c8c1-419b-a1d3-4c8a3d59e50c/Untitled.png)
+
+submit 버튼 클릭
+
+![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/65a1aadf-1a2d-46ad-8d87-c3c6ba831b97/Untitled.png)
+
+정상적으로 동작하는 것을 볼 수 있습니다.
+
+`GET /converter/edit`
+
+        `th:field` 가 자동으로 컨버전 서비스를 적용해주어서 `${{ipPort}}` 처럼 적용이 되었다.
+
+        따라서 `IpPort` → `String` 으로 변환된다.
+
+`POST /converter/edit`
+
+        `@ModelAttribute` 를 사용해서 `String` → `IpPort` 로 변환된다.
+
+다음 글에서는 포맷터(`Formatter`) 에 대해서 알아봅니다. `Formatter` 도 일종의 `Converter` 라고도 볼수 있는데 구체적인 내용은 다음 글을 참조해 주세요.
+
