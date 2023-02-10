@@ -169,3 +169,198 @@ URL 경로는 문자입니다. `/users/10` → 여기서 10도 숫자 10이 아�
 
 다음 챕터에서 실제 코드를 통해 타입 컨버터를 이해할 것입니다.
 
+
+# 2. 타입 컨버터(Converter)
+
+타입 컨버터를 어떻게 사용하는지 코드로 알아봅시다.
+
+타입 컨버터를 사용하려면 `org.springframework.core.convert.converter.Converter` 인터페이스를 구현하면 됩니다. 이전 챕터에서 사진으로 미리 보았죠?
+
+먼저 가장 단순한 형태인 문자를 숫자로 바꾸는 타입 컨버터를 만들어봅시다.
+
+`StringToIntegerConverter` - 문자를 숫자로 변환하는 타입 컨버터
+
+```java
+package hello.typeconverter.converter;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.convert.converter.Converter;
+
+@Slf4j
+public class StringToIntegerConverter implements Converter<String, Integer> {
+    @Override
+    public Integer convert(String source) {
+        log.info("convert source={}", source);
+        return Integer.valueOf(source);
+    }
+
+}
+```
+
+`String` →  `Integer` 로 변환하기 때문에 소스가 String 이 된다. 이 문자를 `Integer.valueOf(source)` 를 사용해서 숫자로 변경한 다음에 변경된 숫자를 반환하면 된다
+
+`IntegerToStringConverter` - 숫자를 문자로 변환하는 타입 컨버터
+
+```java
+package hello.typeconverter.converter;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.convert.converter.Converter;
+
+@Slf4j
+public class IntegerToStringConverter implements Converter<Integer, String> {
+    @Override
+    public String convert(Integer source) {
+        log.info("convert source={}", source);
+        return String.valueOf(source);
+    }
+}
+```
+
+이번에는 숫자를 문자로 변환하는 타입 컨버터입니다. 앞의 컨버터와 반대의 일을 합니다. 이번에는 숫자가 입력되기 때문에 소스가 `Integer` 가 됩니다. `String.valueOf(source)` 을 사용해서 문자로 변경한 다음 변경된 문자를 반환하면 됩니다.
+
+테스트 코드를 통해서 타입 컨버터가 어떻게 동작하는지 확인해봅시다.
+
+`ConverterTest` - 타입 컨버터 테스트 코드
+
+```java
+package hello.typeconverter.converter;
+
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+
+public class ConverterTest {
+    @Test
+    void stringToInteger() {
+        StringToIntegerConverter converter = new StringToIntegerConverter();
+        Integer result = converter.convert("10");
+        assertThat(result).isEqualTo(10);
+    }
+    @Test
+    void integerToString() {
+        IntegerToStringConverter converter = new IntegerToStringConverter();
+        String result = converter.convert(10);
+        assertThat(result).isEqualTo("10");
+    }
+}
+```
+
+테스트 결과 정상적으로 수행되는 것을 알 수 있습니다.
+
+### 사용자 정의 타입 컨버터
+
+타입 컨버터 이해를 돕기 위해서 조금 다른 컨버터를 준비해보았습니다.
+
+`127.0.0.1:8080` 과 같은 IP, PORT 를 입력하면 IpPort 객체로 변환하는 컨버터를 만들어봅시다.
+
+`IpPort`
+
+```java
+package hello.typeconverter.type;
+
+@Getter
+@EqualsAndHashCode
+public class IpPort {
+
+    private String Ip;
+    private int port;
+
+    public IpPort(String ip, int port) {
+        Ip = ip;
+        this.port = port;
+    }
+}
+```
+
+롬복의 `@EqualAndHashCode` 을 넣으면 모든 필드를 사용해서 `equals()`, `hashcode()` 을 생성합니다.
+
+따라서 모든 필드의 값이 같다면 `a.equal(b)` 의 결과가 참이 됩니다.
+
+`StringToIpPortConverter` - 컨버터
+
+```java
+package hello.typeconverter.converter;
+
+import hello.typeconverter.type.IpPort;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.convert.converter.Converter;
+
+@Slf4j
+public class StringToIpPortConverter implements Converter<String, IpPort> {
+
+    @Override
+    public IpPort convert(String source) {
+        log.info("convert source={}", source);
+        String[] split = source.split(":");
+        String ip = split[0];
+        int port = Integer.parseInt(split[1]);
+
+        return new IpPort(ip, port);
+    }
+}
+```
+
+`127.0.0.1:8080` 같은 문자를 입력하면 `IpPort` 객체를 만들어 반환합니다.
+
+`IpPortToStringConverter`
+
+```java
+package hello.typeconverter.converter;
+
+import hello.typeconverter.type.IpPort;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.convert.converter.Converter;
+
+@Slf4j
+public class IpPortToStringConverter implements Converter<IpPort, String> {
+    @Override
+    public String convert(IpPort source) {
+        log.info("convert source={}", source);
+        return source.getIp() + ":" + source.getPort();
+    }
+}
+```
+
+`IpPort` 객체를 입력하면 `127.0.0.1:8080` 같은 문자를 반환합니다.
+
+`ConverterTest` - `IpPort` 컨버터 테스트 추가
+
+```java
+@Test
+void stringToIpPort() {
+    StringToIpPortConverter converter = new StringToIpPortConverter();
+    String source = "127.0.0.1:8080";
+    IpPort result = converter.convert(source);
+    assertThat(result).isEqualTo(new IpPort("127.0.0.1", 8080));
+}
+
+@Test
+void ipPortToString() {
+    IpPortToStringConverter converter = new IpPortToStringConverter();
+    IpPort source = new IpPort("127.0.0.1", 8080);
+    String result = converter.convert(source);
+    assertThat(result).isEqualTo("127.0.0.1:8080");
+}
+```
+
+이번에도 테스트가 성공합니다.
+
+타입 컨버터 인터페이스가 단순해서 이해하기 어렵지 않을 것입니다.
+
+그런데 이렇게 타입 컨버터를 하나하나 직접 사용하면, 개발자가 직접 컨버팅 하는 것과 큰 차이가 없습니다.
+
+**타입 컨버터를 등록하고 관리하면서 편리하게 변환 기능을 제공하는 역할을 하는 무언가가 필요합니다. 이것은 다음 챕터에서 설명합니다.**
+
+> 참고 - 스프링은 용도에 따라 다양한 방식의 타입 컨버터를 제공한다.
+Converter →  기본 타입 컨버터
+ConverterFactory → 전체 클래스 계층 구조가 필요할 때
+GenericConverter → 정교한 구현, 대상 필드의 애노테이션 정보 사용 가능
+ConditionalGenericConverter → 특정 조건이 참인 경우에만 실행
+자세한 내용은 공식 문서를 참고하면 됩니다.
+[https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#coreconvert](https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#coreconvert)
+> 
+
+> 참고 - 스프링은 문자, 숫자, Boolean, Enum 등 일반적인 타입에 대한 대부분의 컨버터를 기본으로 제공한다.  
+IDE에서 Converter , ConverterFactory , GenericConverter 의 구현체를 찾아보면 수 많은 컨버터를 확인할 수 있습니다.
+>
