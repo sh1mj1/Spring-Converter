@@ -983,3 +983,131 @@ data = 10000
 `“10,000”` 이라는 포맷팅된 문자가 `Integer` 타입의 숫자 10000 으로 정상 변환된 것을 확인할 수 있습니다.
 
 
+# 9. 스프링이 제공하는 기본 포맷터
+
+스프링은 자바에서 기본으로 제공하는 타입들에 대해 수많은 포맷터를 기본으로 제공합니다.
+
+IDE 에서 `Formatter` 인터페이스의 구현 클래스를 찾아보면 수많은 날짜, 시간 관련 포맷터가 제공되는 것을 볼 수 있습니다.
+
+그런데 **포맷터는 기본 형식이 지정되어 있기 때문에 객체의 각 필드마다 다른 형식으로 포맷을 지정하기는 어렵습니다.**
+
+스프링은 이런 문제를 해결하기 위해서 애노테이션 기반으로 원하는 형식을 지정해서 사용할 수 있는 매우 유용한 포맷터 두가지를 기본으로 제공합니다.
+
+`@NumberFormat` : 숫자 관련 형식 지정 포맷터 사용. `NumberFormatAnnotationFormatterFactory`
+
+`@DateTimeFormat` : 날짜 관련 형식 지정 포맷터 사용, `Jsr310DateTimeFormatAnnotationFormatterFactory`
+
+예제를 통해서 알아봅시다.
+
+`FormatterController`
+
+```java
+package hello.typeconverter.controller;
+
+import lombok.Data;
+import org.springframework.cglib.core.Local;
+import org.springframework.format.annotation.NumberFormat;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PostMapping;
+
+import java.time.LocalDateTime;
+
+@Controller
+public class FormatterController {
+    @GetMapping("/formatter/edit")
+    public String formatterForm(Model model) {
+        Form form = new Form();
+        form.setNumber(10000);
+        form.setLocalDateTime(LocalDateTime.now());
+        model.addAttribute("form", form);
+        return "formatter-form";
+    }
+    @PostMapping("/formatter/edit")
+    public String formatterEdit(@ModelAttribute Form form) {
+        return "formatter-view";
+    }
+    
+    @Data
+    static class Form {
+        @NumberFormat(pattern = "###,###")
+        private Integer number;
+        @NumberFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+        private LocalDateTime localDateTime;
+    }
+}
+```
+
+### 뷰 등록
+
+`templates/formatter-form.html`
+
+```html
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<form th:object="${form}" th:method="post">
+    number <input type="text" th:field="*{number}"><br/>
+    localDateTime <input type="text" th:field="*{localDateTime}"><br/>
+    <input type="submit"/>
+</form>
+</body>
+</html>
+```
+
+`templates/formatter-view.html`
+
+```html
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<ul>
+    <li>${form.number}: <span th:text="${form.number}"></span></li>
+    <li>${{form.number}}: <span th:text="${{form.number}}"></span></li>
+    <li>${form.localDateTime}: <span th:text="${form.localDateTime}"></span></li>
+    <li>${{form.localDateTime}}: <span th:text="${{form.localDateTime}}"></span></li>
+</ul>
+</body>
+</html>
+```
+
+실행 - http://localhost:8080/formatter/edit
+
+실행해보면 지정한 포맷으로 출력된 것을 확인할 수 있다.
+
+![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/7cc8f4dc-19f5-46de-ad37-3950509bd22e/Untitled.png)
+
+![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/e07b7818-f474-4e9c-9082-9873cd533086/Untitled.png)
+
+![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/435f94ae-b35f-4dd4-9088-a10ba1a0ce57/Untitled.png)
+
+> 참고 - `@NumberFormat` , `@DateTimeFormat` 의 자세한 사용법이 궁금한 분들은 다음 링크를 참고하거나 관련 애노테이션을 검색해봅시다.
+
+https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#formatCustomFormatAnnotations
+> 
+
+### 정리
+
+컨버터를 사용하든, 포맷터를 사용하든 등록 방법은 조금 다르지만 사용할 때는 컨버전 서비스를 통해서 일관성 있게 사용할 수 있습니다.
+
+### 주의할 점
+
+메시지 컨버터(`HttpMessageConverter`) 에는 컨버전 서비스가 적용되는 것이 아닙니다.
+
+특히 객체를 JSON 으로 변환할 때 메시지 컨버터를 사용하면서 이 부분을 많이 오해하는데 `HttpMessageConverter` 의 역할은 HTTP 메시지 바디의 내용을 객체로 변환하거나 객체를 HTTP 메시지 바디에 입력하는 것입니다.
+
+예를 들어서 JSON 을 객체로 변환하는 메시지 컨버터는 내부에서 Jackson 같은 라이브러리를 사용합니다. 객체를 JSON 으로 변환한다면 그 결과는 이 라이브러리에 달린 것입니다. 
+
+따라서 JSON 결과로 만들어지는 숫자나 날짜 포맷을 변경하고 싶으면 해당 라이브러리가 제공하는 설정을 통해서 포맷을 지정해야 합니다. 결과적으로 이것은 컨버전 서비스와 전혀 관계가 없습니다.
+
+컨버전 서비스는 `@RequestParam`, `@ModelAttribute`, `@PathVariable`, 뷰 템플릿 등에서 사용할 수 있습니다.
