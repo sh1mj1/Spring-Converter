@@ -800,16 +800,16 @@ import java.text.ParseException;
 import java.util.Locale;
 
 @Slf4j
-public class MyNumberFormatter implements Formatter {
+public class MyNumberFormatter implements Formatter<Number> {
     @Override
-    public Object parse(String text, Locale locale) throws ParseException {
+    public Number parse(String text, Locale locale) throws ParseException {
         log.info("text={}, locale={}", text, locale);
         NumberFormat format = NumberFormat.getInstance(locale);
         return format.parse(text);
     }
 
     @Override
-    public String print(Object object, Locale locale) {
+    public String print(Number object, Locale locale) {
         log.info("object ={}, locale={}", object, locale);
         return NumberFormat.getInstance(locale).format(object);
     }
@@ -842,7 +842,7 @@ class MyNumberFormatterTest {
 
     @Test
     void parse() throws ParseException {
-        Number result = (Number) formatter.parse("1,000", Locale.KOREA);
+        Number result = formatter.parse("1,000", Locale.KOREA);
         assertThat(result).isEqualTo(1000L); // Long 타입임을 주의해야 합니다.
     }
 
@@ -871,7 +871,7 @@ AnnotationFormatterFactory :  필드의 타입이나 애노테이션 정보를 �
 > 
 > 자세한 내용은 공식 문서를 참고하면 됩니다.
 > [https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#format](https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#format)
->
+> 
 
 # 7. 포맷터를 지원하는 컨버전 서비스
 
@@ -926,3 +926,60 @@ public class FormattingConversionServiceTest {
 `FormattingConversion` 은 `ConversionService` 관련 기능을 상속받기 때문에 결과적으로 컨버터와 포맷터 둘 모두 등록할 수 있습니다. 그리고 사용할 때는 `ConversionService` 가 제공하는 `convert` 을 사용하면 됩니다.
 
 추가로 스프링 부트는 `DefaultFormattingConversionService` 을 상속받은 `WebConversionService` 을 내부에서 사용합니다.
+
+# 8. 포맷터 적용하기
+
+그렇다면 이제 포맷터를 웹 애플리케이션에 직접 적용해봅시다.
+
+`WebConfig` - 수정
+
+```java
+package hello.typeconverter;
+
+import hello.typeconverter.converter.IpPortToStringConverter;
+import hello.typeconverter.converter.StringToIpPortConverter;
+import hello.typeconverter.formatter.MyNumberFormatter;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.format.FormatterRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+@Configuration
+public class WebConfig implements WebMvcConfigurer {
+    @Override
+    public void addFormatters(FormatterRegistry registry) {
+//        registry.addConverter(new IntegerToStringConverter());
+//        registry.addConverter(new StringToIntegerConverter());
+        registry.addConverter(new IpPortToStringConverter());
+        registry.addConverter(new StringToIpPortConverter());
+
+        // 추가
+        registry.addFormatter(new MyNumberFormatter());
+
+    }
+}
+```
+
+주의 - `StringToIntegerConverter`, `IntegerToStringConverter` 을 꼭 주석 처리해야 합니다.
+
+MyNumberFormatter 도 숫자 → 문자, 문자 → 숫자 로 변경하기 때문에 둘의 기능이 겹치는데 우선순위는 컨버터가 더 우선이기 때문에 포맷터가 적용되지 않고 컨버터가 적용됩니다.
+
+### 실행
+
+[http://localhost:8080/converter-view](http://localhost:8080/converter-view) (객체 → 문자)
+
+![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/bd8855be-7bb1-40a5-821d-09bd09024f79/Untitled.png)
+
+컨버전 서비스를 적용한 결과 `MyNumberFormatter` 가 적용되어서 `10,000` 문자가 출력된 것을 확인할 수 있습니다.
+
+[http://localhost:8080/](http://localhost:8080/converter-view)hello-v2?data=10,000 (문자 → 객체)
+
+실행 로그
+
+```java
+MyNumberFormatter : text=10,000, locale=ko_KR
+data = 10000
+```
+
+`“10,000”` 이라는 포맷팅된 문자가 `Integer` 타입의 숫자 10000 으로 정상 변환된 것을 확인할 수 있습니다.
+
+

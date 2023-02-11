@@ -13,7 +13,7 @@ class MyNumberFormatterTest {
 
     @Test
     void parse() throws ParseException {
-        Number result = (Number) formatter.parse("1,000", Locale.KOREA);
+        Number result = formatter.parse("1,000", Locale.KOREA);
         assertThat(result).isEqualTo(1000L); // Long 타입임을 주의해야 합니다.
     }
 
