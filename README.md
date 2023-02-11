@@ -873,3 +873,56 @@ AnnotationFormatterFactory :  필드의 타입이나 애노테이션 정보를 �
 > [https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#format](https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#format)
 >
 
+# 7. 포맷터를 지원하는 컨버전 서비스
+
+컨버전 서비스에는 컨버터만 등록할 수 있고, 포맷터를 등록할 수는 없습니다. 
+
+그런데 생각해보면 포맷터는 `객체 → 문자`, `문자 → 객체` 로 변환하는 일종의 특별한 컨버터일 뿐입니다.
+
+즉, 포맷터를 지원하는 컨버전 서비스를 사용하면 컨버전 서비스에 포맷터를 추가할 수 있습니다. 내부에서 어댑터 패턴을 사용해서 `Formatter` 가 `Converter` 처럼 동작하도록 지원합니다.
+
+`FormattingConversionService` 는 포맷터를 지원하는 컨버전 서비스입니다.
+
+`DefaultFormattingConversionService` 는 `FormattingConversionService` 에 기본적인 통화, 숫자 관련 몇가지 기본 포맷터를 추가해서 제공합니다.
+
+`FormattingConversionServiceTest`
+
+```java
+package hello.typeconverter.formatter;
+
+import hello.typeconverter.converter.IpPortToStringConverter;
+import hello.typeconverter.converter.StringToIpPortConverter;
+import hello.typeconverter.type.IpPort;
+import org.junit.jupiter.api.Test;
+import org.springframework.format.support.DefaultFormattingConversionService;
+
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+
+public class FormattingConversionServiceTest {
+
+    @Test
+    void FormattingConversionService() {
+
+        DefaultFormattingConversionService conversionService = new DefaultFormattingConversionService();
+
+        conversionService.addConverter(new IpPortToStringConverter());
+        conversionService.addConverter(new StringToIpPortConverter());
+        conversionService.addFormatter(new MyNumberFormatter());
+
+        // Converter
+        IpPort ipPort = conversionService.convert("127.0.0.1:8080", IpPort.class);
+        assertThat(ipPort).isEqualTo(new IpPort("127.0.0.1", 8080));
+
+        // Formatter
+        assertThat(conversionService.convert(1000, String.class)).isEqualTo("1,000");
+        assertThat(conversionService.convert("1,000", Long.class)).isEqualTo(1000L);
+
+    }
+}
+```
+
+### DefaultFormattingConversionService 상속 관계
+
+`FormattingConversion` 은 `ConversionService` 관련 기능을 상속받기 때문에 결과적으로 컨버터와 포맷터 둘 모두 등록할 수 있습니다. 그리고 사용할 때는 `ConversionService` 가 제공하는 `convert` 을 사용하면 됩니다.
+
+추가로 스프링 부트는 `DefaultFormattingConversionService` 을 상속받은 `WebConversionService` 을 내부에서 사용합니다.
